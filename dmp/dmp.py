@@ -33,9 +33,9 @@ class DMP(object):
         weights.
         """
         n_features = w.shape[1]
-        h = exp(-self.alpha_t * linspace(0, tau, n_features) / tau)
-        c = diff(h)
-        c = hstack((c, [c[-1]]))
+        c = exp(-self.alpha_t * linspace(0, tau, n_features) / tau)
+        h = diff(c)
+        h = hstack((h, [h[-1]]))
         phi = exp(-h*(s-c)**2)
         f = (phi * w / phi.sum()).sum(axis=1) * s
         if scale:
