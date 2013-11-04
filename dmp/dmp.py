@@ -61,3 +61,31 @@ class DMP(object):
                 theta = arccos((o-X[i, j]).dot(Xd[i, j]) / (linalg.norm(o-X[i, j]) * linalg.norm(Xd[i, j]) + 1e-10))
                 C[i, j] = self.gamma_o * R.dot(Xd[i, j]) * theta * exp(-self.beta_o * theta)
         return squeeze(C)
+
+    def design_matrix(self, n_features, tau, demo):
+        n_steps, n_task_dims = demo.shape
+        S = exp(-self.alpha_t * linspace(0, tau, n_steps) / tau)
+        c = exp(-self.alpha_t * linspace(0, tau, n_features) / tau)
+        h = diff(c)
+        h = hstack((h, [h[-1]]))
+        D = array([exp(-h*(s-c)**2) for s in S])
+
+        return D
+
+    def forces(self, tau, demo, scale=False):
+        """Determine forces for imitation learning."""
+        # TODO use scale
+        n_steps, n_task_dims = demo.shape
+        dt = tau / n_steps
+
+        X = demo
+        Xd = diff(X, axis=0) / dt
+        Xd = vstack((Xd, [Xd[-1]]))
+        Xdd = diff(Xd, axis=0) / dt
+        Xdd = vstack((Xdd, [Xdd[-1]]))
+
+        x0 = X[0]
+        g = X[-1]
+        f_target = tau**2*Xdd - self.alpha*(self.beta*(g-X) - tau*Xd)
+
+        return f_target, x0, g
