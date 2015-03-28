@@ -13,13 +13,17 @@ class DMP(object):
         self.gamma_o = 1000.0
         self.beta_o = 20.0 / np.pi
 
-    def phase(self, tau, n_steps, t):
+    def phase(self, n_steps, t=None):
         """The phase variable replaces explicit timing.
 
         It starts with 1 at the beginning of the movement and converges
         exponentially to 0.
         """
-        return np.exp(-self.alpha_t * np.linspace(0, tau, n_steps)[t] / tau)
+        phases = np.exp(-self.alpha_t * np.linspace(0, 1, n_steps))
+        if t is None:
+            return phases
+        else:
+            return phases[t]
 
     def spring_damper(self, x0, g, tau, s, X, Xd):
         """The transformation system generates a goal-directed movement."""
@@ -35,20 +39,23 @@ class DMP(object):
     def forcing_term(self, x0, g, tau, w, s, X, scale=False):
         """The forcing term shapes the movement based on the weights."""
         n_features = w.shape[1]
-        h = np.exp(-self.alpha_t * np.linspace(0, tau, n_features) / tau)
-        c = np.diff(h)
-        c = np.hstack((c, [c[-1]]))
-        phi = np.exp(-h * (s - c) ** 2)
-        f = w.dot(s * phi / phi.sum())
+        f = np.dot(w, self._features(tau, n_features, s))
         if scale:
             f *= g - x0
-    
+
         if X.ndim == 3:
             F = np.empty_like(X)
             F[:, :] = f
             return F
         else:
             return f
+
+    def _features(self, tau, n_features, s):
+        c = self.phase(n_features)
+        h = np.diff(c)
+        h = np.hstack((h, [h[-1]]))
+        phi = np.exp(-h * (s - c) ** 2)
+        return s * phi / phi.sum()
 
     def obstacle(self, o, X, Xd):
         """Obstacle avoidance is based on point obstacles."""
@@ -74,28 +81,16 @@ class DMP(object):
     def imitate(self, X, tau, n_features):
         n_steps, n_dims = X.shape
         dt = tau / float(n_steps - 1)
-        y0 = X[:, 0]
         g = X[:, -1]
 
-        Xd = np.empty_like(X)
-        for d in range(n_dims):
-            Xd[:, d] = np.gradient(X[:, d], dt)
-
-        Xdd = np.empty_like(X)
-        for d in range(n_dims):
-            Xdd[:, d] = np.gradient(Xd[:, d], dt)
+        Xd = np.vstack((np.zeros((1, n_dims)), np.diff(X, axis=0) / dt))
+        Xdd = np.vstack((np.zeros((1, n_dims)), np.diff(Xd, axis=0) / dt))
 
         F = tau * tau * Xdd - self.alpha * (self.beta * (g[:, np.newaxis] - X)
                                             - tau * Xd)
-        S = np.array([self.phase(tau, n_steps, t)
-                      for t in np.linspace(0, tau, n_steps)])
 
-        h = np.exp(-self.alpha_t * np.linspace(0, tau, n_features) / tau)
-        c = np.diff(h)
-        c = np.hstack((c, [c[-1]]))
-        Phi = np.array([np.exp(-h * (s - c) ** 2) for s in S])
-
-        design = S[:, np.newaxis] * Phi / Phi.sum(axis=1)[:, np.newaxis]
+        design = np.array([self._features(tau, n_features, s)
+                           for s in self.phase(n_steps)])
         w = np.linalg.lstsq(design, F)[0].T
 
         return w
@@ -107,16 +102,17 @@ def trajectory(dmp, w, x0, g, dt, tau, n_steps, o, shape, avoidance, verbose=0):
               % (x0, g, tau, dt, n_steps))
     x = x0.copy()
     xd = np.zeros_like(x, dtype=np.float64)
+    xdd = np.zeros_like(x, dtype=np.float64)
 
     X = [x0.copy()]
     Xd = [xd.copy()]
-    for t in xrange(n_steps):
-        s = dmp.phase(tau, n_steps, t)
+    for s in dmp.phase(n_steps):
+        x += dt * xd
+        xd += dt * xdd
         sd = dmp.spring_damper(x0, g, tau, s, x, xd)
         f = dmp.forcing_term(x0, g, tau, w, s, x) if shape else 0.0
         C = dmp.obstacle(o, x, xd) if avoidance else 0.0
-        xd += dt * (sd + f + C)
-        x += dt * xd
+        xdd = sd + f + C
         X.append(x.copy())
         Xd.append(xd.copy())
     return np.array(X), np.array(Xd)
@@ -130,7 +126,7 @@ def potential_field(dmp, t, v, w, x0, g, tau, n_steps, o, x_range, y_range,
     xd = np.empty_like(x)
     xd[:, :] = v
 
-    s = dmp.phase(tau, n_steps, t)
+    s = dmp.phase(n_steps, t)
     sd = dmp.spring_damper(x0, g, tau, s, x, xd)
     f = dmp.forcing_term(x0, g, tau, w, s, x)
     C = dmp.obstacle(o, x, xd)
