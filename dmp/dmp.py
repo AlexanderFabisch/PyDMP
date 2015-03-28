@@ -39,7 +39,7 @@ class DMP(object):
         c = np.diff(h)
         c = np.hstack((c, [c[-1]]))
         phi = np.exp(-h * (s - c) ** 2)
-        f = (phi * w / phi.sum()).sum(axis=1) * s
+        f = w.dot(s * phi / phi.sum())
         if scale:
             f *= g - x0
     
@@ -70,6 +70,35 @@ class DMP(object):
                            np.exp(-self.beta_o * theta))
 
         return np.squeeze(C)
+
+    def imitate(self, X, tau, n_features):
+        n_steps, n_dims = X.shape
+        dt = tau / float(n_steps - 1)
+        y0 = X[:, 0]
+        g = X[:, -1]
+
+        Xd = np.empty_like(X)
+        for d in range(n_dims):
+            Xd[:, d] = np.gradient(X[:, d], dt)
+
+        Xdd = np.empty_like(X)
+        for d in range(n_dims):
+            Xdd[:, d] = np.gradient(Xd[:, d], dt)
+
+        F = tau * tau * Xdd - self.alpha * (self.beta * (g[:, np.newaxis] - X)
+                                            - tau * Xd)
+        S = np.array([self.phase(tau, n_steps, t)
+                      for t in np.linspace(0, tau, n_steps)])
+
+        h = np.exp(-self.alpha_t * np.linspace(0, tau, n_features) / tau)
+        c = np.diff(h)
+        c = np.hstack((c, [c[-1]]))
+        Phi = np.array([np.exp(-h * (s - c) ** 2) for s in S])
+
+        design = S[:, np.newaxis] * Phi / Phi.sum(axis=1)[:, np.newaxis]
+        w = np.linalg.lstsq(design, F)[0].T
+
+        return w
 
 
 def trajectory(dmp, w, x0, g, dt, tau, n_steps, o, shape, avoidance, verbose=0):
