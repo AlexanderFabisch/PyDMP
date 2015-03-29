@@ -100,9 +100,16 @@ class DMP(object):
 
 def trajectory(dmp, w, x0, g, tau, dt, o=None, shape=True, avoidance=False,
                verbose=0):
+    """Generate trajectory from DMP in open loop."""
+    if verbose >= 1:
+        print("Trajectory with x0 = %s, g = %s, tau=%.2f, dt=%.3f"
+              % (x0, g, tau, dt))
+
     x = x0.copy()
     xd = np.zeros_like(x, dtype=np.float64)
     xdd = np.zeros_like(x, dtype=np.float64)
+    X = [x0.copy()]
+    Xd = [xd.copy()]
 
     # Internally, we do Euler integration usually with a much smaller step size
     # than the step size required by the system
@@ -110,20 +117,17 @@ def trajectory(dmp, w, x0, g, tau, dt, o=None, shape=True, avoidance=False,
     n_internal_steps = int(tau / internal_dt)
     steps_between_measurement = int(dt / internal_dt)
 
-    if verbose >= 1:
-        print("Trajectory with x0 = %s, g = %s, tau=%.2f, dt=%.3f"
-              % (x0, g, tau, dt))
-
-    X = [x0.copy()]
-    Xd = [xd.copy()]
-
-    t = 0.0
+    # Usually we would initialize t with 0, but that results in floating point
+    # errors for very small step sizes. To ensure that the condition t < tau
+    # really works as expected, we add a constant that is smaller than
+    # internal_dt.
+    t = 0.5 * internal_dt
     ti = 0
     S = dmp.phase(n_internal_steps + 1)
-    while t <= tau:
-        s = S[ti]
+    while t < tau:
         t += internal_dt
         ti += 1
+        s = S[ti]
 
         x += internal_dt * xd
         xd += internal_dt * xdd
