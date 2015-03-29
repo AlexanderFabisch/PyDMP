@@ -51,6 +51,8 @@ class DMP(object):
             return f
 
     def _features(self, tau, n_features, s):
+        if n_features == 0:
+            return np.array([])
         c = self.phase(n_features)
         h = np.diff(c)
         h = np.hstack((h, [h[-1]]))
@@ -96,35 +98,57 @@ class DMP(object):
         return w
 
 
-def trajectory(dmp, w, x0, g, dt, tau, n_steps, o, shape, avoidance, verbose=0):
-    if verbose >= 1:
-        print("Trajectory with x0 = %s, g = %s, tau=%.2f, dt=%.3f, n_steps=%d"
-              % (x0, g, tau, dt, n_steps))
+def trajectory(dmp, w, x0, g, tau, dt, o=None, shape=True, avoidance=False,
+               verbose=0):
     x = x0.copy()
     xd = np.zeros_like(x, dtype=np.float64)
     xdd = np.zeros_like(x, dtype=np.float64)
 
+    # Internally, we do Euler integration usually with a much smaller step size
+    # than the step size required by the system
+    internal_dt = min(0.001, dt)
+    n_internal_steps = int(tau / internal_dt)
+    steps_between_measurement = int(dt / internal_dt)
+
+    if verbose >= 1:
+        print("Trajectory with x0 = %s, g = %s, tau=%.2f, dt=%.3f"
+              % (x0, g, tau, dt))
+
     X = [x0.copy()]
     Xd = [xd.copy()]
-    for s in dmp.phase(n_steps):
-        x += dt * xd
-        xd += dt * xdd
+
+    t = 0.0
+    ti = 0
+    S = dmp.phase(n_internal_steps + 1)
+    while t <= tau:
+        s = S[ti]
+        t += internal_dt
+        ti += 1
+
+        x += internal_dt * xd
+        xd += internal_dt * xdd
+
         sd = dmp.spring_damper(x0, g, tau, s, x, xd)
         f = dmp.forcing_term(x0, g, tau, w, s, x) if shape else 0.0
         C = dmp.obstacle(o, x, xd) if avoidance else 0.0
         xdd = sd + f + C
-        X.append(x.copy())
-        Xd.append(xd.copy())
+
+        if ti % steps_between_measurement == 0:
+            X.append(x.copy())
+            Xd.append(xd.copy())
+
     return np.array(X), np.array(Xd)
 
 
-def potential_field(dmp, t, v, w, x0, g, tau, n_steps, o, x_range, y_range,
+def potential_field(dmp, t, v, w, x0, g, tau, dt, o, x_range, y_range,
                     n_tics):
     xx, yy = np.meshgrid(np.linspace(x_range[0], x_range[1], n_tics),
                          np.linspace(y_range[0], y_range[1], n_tics))
     x = np.array((xx, yy)).transpose((1, 2, 0))
     xd = np.empty_like(x)
     xd[:, :] = v
+
+    n_steps = int(tau / dt)
 
     s = dmp.phase(n_steps, t)
     sd = dmp.spring_damper(x0, g, tau, s, x, xd)
