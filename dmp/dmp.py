@@ -53,6 +53,8 @@ class DMP(object):
     def _features(self, tau, n_features, s):
         if n_features == 0:
             return np.array([])
+        elif n_features == 1:
+            return np.array([1.0])
         c = self.phase(n_features)
         h = np.diff(c)
         h = np.hstack((h, [h[-1]]))
@@ -87,13 +89,18 @@ class DMP(object):
 
         Xd = np.vstack((np.zeros((1, n_dims)), np.diff(X, axis=0) / dt))
         Xdd = np.vstack((np.zeros((1, n_dims)), np.diff(Xd, axis=0) / dt))
+        print Xdd
 
         F = tau * tau * Xdd - self.alpha * (self.beta * (g[:, np.newaxis] - X)
                                             - tau * Xd)
 
         design = np.array([self._features(tau, n_features, s)
                            for s in self.phase(n_steps)])
-        w = np.linalg.lstsq(design, F)[0].T
+        #w = np.linalg.lstsq(design, F)[0].T
+        from sklearn.linear_model import Ridge
+        lr = Ridge(alpha=1.0, fit_intercept=False)
+        lr.fit(design, F)
+        w = lr.coef_
 
         return w
 
@@ -110,6 +117,7 @@ def trajectory(dmp, w, x0, g, tau, dt, o=None, shape=True, avoidance=False,
     xdd = np.zeros_like(x, dtype=np.float64)
     X = [x0.copy()]
     Xd = [xd.copy()]
+    Xdd = [xdd.copy()]
 
     # Internally, we do Euler integration usually with a much smaller step size
     # than the step size required by the system
@@ -140,8 +148,9 @@ def trajectory(dmp, w, x0, g, tau, dt, o=None, shape=True, avoidance=False,
         if ti % steps_between_measurement == 0:
             X.append(x.copy())
             Xd.append(xd.copy())
+            Xdd.append(xdd.copy())
 
-    return np.array(X), np.array(Xd)
+    return np.array(X), np.array(Xd), np.array(Xdd)
 
 
 def potential_field(dmp, t, v, w, x0, g, tau, dt, o, x_range, y_range,
