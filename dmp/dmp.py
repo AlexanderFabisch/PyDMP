@@ -71,8 +71,8 @@ class DMP(object):
         C = np.zeros_like(X)
         R = np.array([[np.cos(np.pi / 2.0), -np.sin(np.pi / 2.0)],
                       [np.sin(np.pi / 2.0),  np.cos(np.pi / 2.0)]])
-        for i in xrange(X.shape[0]):
-            for j in xrange(X.shape[1]):
+        for i in range(X.shape[0]):
+            for j in range(X.shape[1]):
                 obstacle_diff = o - X[i, j]
                 theta = (np.arccos(obstacle_diff.dot(Xd[i, j]) /
                                    (np.linalg.norm(obstacle_diff) *
@@ -89,7 +89,6 @@ class DMP(object):
 
         Xd = np.vstack((np.zeros((1, n_dims)), np.diff(X, axis=0) / dt))
         Xdd = np.vstack((np.zeros((1, n_dims)), np.diff(Xd, axis=0) / dt))
-        print Xdd
 
         F = tau * tau * Xdd - self.alpha * (self.beta * (g[:, np.newaxis] - X)
                                             - tau * Xd)
