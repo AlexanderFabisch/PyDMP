@@ -6,7 +6,7 @@ Python. The main purpose of this implementation for me is to understand the
 behavior of DMPs.
 
 An illustrative notebook can be found
-[here](http://nbviewer.ipython.org/github/AlexanderFabisch/PyDMP/blob/master/DMP.ipynb).
+[here](https://github.com/AlexanderFabisch/PyDMP/blob/master/DMP.ipynb).
 
 The papers that I used to implement DMPs are
 
