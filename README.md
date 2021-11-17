@@ -5,6 +5,9 @@ This is a very simple implementation of dynamic movement primitives (DMP) in
 Python. The main purpose of this implementation for me is to understand the
 behavior of DMPs.
 
+If you need a more robust, fast, and versatile implementation, take a look
+at [movement_primitives](https://github.com/dfki-ric/movement_primitives).
+
 An illustrative notebook can be found
 [here](https://github.com/AlexanderFabisch/PyDMP/blob/master/DMP.ipynb).
 
